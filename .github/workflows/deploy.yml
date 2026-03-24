@@ -1,0 +1,66 @@
+name: CI/CD Production Pipeline
+
+on:
+  push:
+    branches: [ "main" ] # Запускаем в главную ветку
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+          pip install pytest requests fastapi testclient # Доп. библиотеки для тестов
+      - name: Run Pytest
+        run: pytest tests/ 
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }} # Берем секреты
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      # Генерируем уникальный тег
+      - name: Set Image Tag
+        run: echo "IMAGE_TAG=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: mirdy1998/fastapi-app:${{ env.IMAGE_TAG }}, mirdy1998/fastapi-app:latest
+
+  # ДЕПЛОЙ
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set Image Tag
+        run: echo "IMAGE_TAG=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Configure Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config # Берем конфиг из секретов
+      
+      # Магия: Заменяем заглушку DOCKER_IMAGE_TAG на реальный тег в YAML
+      - name: Update Image in manifests
+        run: |
+          sed -i "s|DOCKER_IMAGE_TAG|mirdy1998/fastapi-app:${{ env.IMAGE_TAG }}|g" k8s/deployment.yaml
+
+      - name: Deploy to K8s cluster
+        run: |
+          kubectl apply -f k8s/
