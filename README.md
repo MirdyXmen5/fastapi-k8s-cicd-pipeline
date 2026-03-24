@@ -33,5 +33,3 @@ To make this pipeline work, the following secrets must be configured in reposito
 - `DOCKERHUB_USERNAME`: Your Docker Hub login.
 - `DOCKERHUB_TOKEN`: Your Docker Hub Access Token (Personal Access Token).
 - `KUBE_CONFIG`: The complete content of your `~/.kube/config` file to access the EKS cluster (obtained after Project 1).
-
-*Disclaimer: This repository implements the "Push-model" of CI/CD. For "Pull-model" (GitOps), see Project 3.*
